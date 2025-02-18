@@ -1,20 +1,34 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * const {onCall} = require("firebase-functions/v2/https");
- * const {onDocumentWritten} = require("firebase-functions/v2/firestore");
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
-
-const {onRequest} = require("firebase-functions/v2/https");
 const logger = require("firebase-functions/logger");
+const admin = require("firebase-admin");
+const axios = require("axios");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
-// Create and deploy your first functions
-// https://firebase.google.com/docs/functions/get-started
+admin.initializeApp();
+const db = admin.firestore();
 
- exports.helloWorld = onRequest((request, response) => {
-   logger.info("Hello logs!", {structuredData: true});
-   response.send("Hello from Firebase!");
- });
+exports.scheduledRun = onSchedule(
+    { interval: "every 24 hours", timeoutSeconds: 540 }, 
+    async () => {
+        try {
+            console.log("Scheduled function started.");
 
+            const params = {
+                access_key: process.env.API_KEY,
+                query: "New York",
+            };
+
+            const response = await axios.get('http://api.weatherstack.com/current', { params });
+
+            const docRef = db.collection("weather").doc("current");
+            await docRef.set({ current: response.data });
+
+            console.log("Data saved successfully!");
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            logger.error(error, { structuredData: true });
+        } finally {
+            console.log("Scheduled function completed.");
+            return null; 
+        }
+    }
+);
